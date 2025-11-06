@@ -357,33 +357,22 @@ function check_attack_collision(attack_x, attack_y, attack_w, attack_h)
 end
 
 function hit_enemy(enemy)
-    -- spawn xp orb at enemy position
-    spawn_xp_orb(enemy.x + enemy.w/2, enemy.y + enemy.h/2)
-    
     -- combo and scoring
     combo += 1
-    local multiplier = get_combo_multiplier()
-    xp += flr(5 * multiplier)
-    score += flr(10 * multiplier)
-    
+    if combo >= 50 then combo_multiplier = 3
+    elseif combo >= 20 then combo_multiplier = 2.5
+    elseif combo >= 10 then combo_multiplier = 2
+    elseif combo >= 5 then combo_multiplier = 1.5
+    else combo_multiplier = 1.0 end
+
+    -- spawn xp orb at enemy position
+    for i = 1, (combo_multiplier * 2) do
+      spawn_xp_orb(enemy.x + enemy.w/2, enemy.y + enemy.h/2)
+    end
     -- effects
     freeze_timer = 4
     shake_timer = 6
     shake_intensity = 3
-    
-    -- check player level up
-    if xp >= xp_to_next then
-      xp -= xp_to_next
-      player_level += 1
-      xp_to_next += 5
-      
-      -- start powerup selection with slide animation
-      game_state = "powerup_selection"
-      powerup_cursor = 1
-      powerup_slide_timer = 0
-      powerup_fully_visible = false
-      generate_powerup_options()
-    end
     
     refresh_jumps()
     
@@ -394,11 +383,12 @@ function spawn_xp_orb(x, y)
   local orb = {
     x = x,
     y = y,
-    dx = 0,
-    dy = 0,
-    life = 90, -- frames until auto-collect
+    dx = rnd(10) - rnd(10),
+    dy = rnd(10) - rnd(10),
+    timer = 10, -- frames until auto-collect
     pulse = 0, -- for pulsing animation
-    size = 2
+    size = 2,
+    life = 90
   }
   add(xp_orbs, orb)
 end
@@ -407,31 +397,40 @@ function update_xp_orbs()
   for orb in all(xp_orbs) do
     orb.life -= 1
     orb.pulse += 0.2
-    
+    orb.timer -= 1
     -- move toward player
     local player_center_x = player.x + player.w/2
     local player_center_y = player.y + player.h/2
-    
-    local dx = player_center_x - orb.x
-    local dy = player_center_y - orb.y
-    local dist = sqrt(dx*dx + dy*dy)
-    
     -- acceleration toward player (stronger when closer)
-    local accel = 1--max(0.1, 1 / max(dist, 1))
-    if dist > 0 then
-      orb.dx += (dx / dist) * accel
-      orb.dy += (dy / dist) * accel
+    if orb.timer <= 0  then
+      orb.dx = player_center_x - orb.x
+      orb.dy = player_center_y - orb.y
     end
     
     -- apply movement with damping
-    orb.dx *= 0.95
-    orb.dy *= 0.95
+    orb.dx *= 0.2
+    orb.dy *= 0.2
     orb.x += orb.dx
     orb.y += orb.dy
     
     -- check if collected
-    if dist < 8 or orb.life <= 0 then
+    if (orb.x <= player_center_x + 10 and orb.y <= player_center_y + 10) or orb.life <= 0 then
       del(xp_orbs, orb)
+      xp += 2
+      score += 5
+      -- check player level up
+      if xp >= xp_to_next then
+        xp -= xp_to_next
+        player_level += 1
+        xp_to_next += 5
+        
+        -- start powerup selection with slide animation
+        game_state = "powerup_selection"
+        powerup_cursor = 1
+        powerup_slide_timer = 0
+        powerup_fully_visible = false
+        generate_powerup_options()
+      end
       -- no need to add xp here - already added in hit_enemy()
     end
   end
@@ -472,17 +471,10 @@ function kill_enemy(enemy)
 
 end
 
-function get_combo_multiplier()
-  if combo >= 50 then return 1.4
-  elseif combo >= 20 then return 1.3
-  elseif combo >= 10 then return 1.2
-  elseif combo >= 5 then return 1.1
-  else return 1.0 end
-end
-
 function end_combo()
   if combo >= 5 then combo_end_timer = 90 end
   combo = 0
+  combo_multiplier = 0
 end
 
 function heal() 
@@ -751,8 +743,8 @@ function break_platform(platform)
   end
   
   -- screen shake from destruction
-  shake_timer = 8
-  shake_intensity = 2
+  shake_timer = 4
+  shake_intensity = 1
 end
 
 -- SCORING AND PROGRESSION
